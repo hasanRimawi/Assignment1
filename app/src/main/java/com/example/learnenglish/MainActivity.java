@@ -2,13 +2,17 @@ package com.example.learnenglish;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.provider.ContactsContract;
 import android.util.Log;
 import android.view.View;
@@ -17,17 +21,24 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.example.learnenglish.adapters.DefinitionAdapter;
 import com.example.learnenglish.model.Definition;
 import com.example.learnenglish.model.Meaning;
 import com.example.learnenglish.model.Phonetic;
 import com.example.learnenglish.model.Root;
+import com.example.learnenglish.model.SearchedWord;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 
 import java.io.IOException;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -44,17 +55,31 @@ public class MainActivity extends AppCompatActivity {
     private Button btn_hear;
     Root[] entity = new Root[1];
     private String audioUrl = "";
+    private RecyclerView recycler;
 
+    List<SearchedWord> searchedWords = new ArrayList();
 
+    SharedPreferences localStorage;
+    SharedPreferences.Editor editor;
+    Gson jsonConverter = new Gson();
+
+    // TODO: 6/12/2023  I added the addition of the newly searched word to the list method, and also the fetching to the list method, Now: make the recycler view and use the list to get the instances from it
+    // last to-do is done
+    // TODO: 6/15/2023 Check the last three methods, then use them across the application wherever they're needed.
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        localStorage = PreferenceManager.getDefaultSharedPreferences(MainActivity.this);
+        editor = localStorage.edit();
         edt_wantedWord = findViewById(R.id.edt_readWord);
         btn_search = findViewById(R.id.btn_search);
         txt_def = findViewById(R.id.txt_wordDef);
         txt_example = findViewById(R.id.txt_example);
         btn_hear = findViewById(R.id.btn_listen);
+        recycler = findViewById(R.id.words_recycler);
+        fetchSearchedWords();
+        fetchCards();
         btn_search.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -149,6 +174,8 @@ public class MainActivity extends AppCompatActivity {
                         entity[0].meanings[0].definitions = filteredDefinitions;
                     }
                     String finalDefintionSub = defintionSub;
+                    SearchedWord newWord = new SearchedWord(word, finalDefintionSub);
+                    addToListAndSave(newWord);
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
@@ -166,6 +193,7 @@ public class MainActivity extends AppCompatActivity {
                                     txt_def.setText(entity[0].meanings[0].definitions[0].definition);
                                     txt_example.setText(entity[0].meanings[0].definitions[0].example);
                                 }
+                                fetchCards();
                             } else {
                                 txt_def.setText("No definition Found");
                                 audioUrl = "noAudio";
@@ -182,6 +210,37 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    public void addToListAndSave(SearchedWord newWord) {
+        searchedWords.add(newWord);
+        String list = jsonConverter.toJson(searchedWords);
+        editor.putString("List", list);
+        Log.d("Add and Save", list);
+        Log.d("State of saving", String.valueOf(editor.commit()));
+    }
+
+    public void fetchSearchedWords() {
+        Type searchedWordListType = new TypeToken<List<SearchedWord>>() {
+        }.getType();
+        String jsonWords = localStorage.getString("List", "Not found");
+        Log.d("fetch searched to list", jsonWords);
+        if(!jsonWords.equals("Not found"))
+            searchedWords = jsonConverter.fromJson(jsonWords, searchedWordListType);
+    }
+
+    public void fetchCards(){
+        Log.d("start of cards fetch", "I'm in");
+        Log.d("State of storage persistence", localStorage.getString("List", "Not found"));
+        String[] cardWords = new String[searchedWords.size()];
+        String[] cardDefinitions = new String[searchedWords.size()];
+        for(int i = 0; i < searchedWords.size(); i++){
+            cardDefinitions[i] = searchedWords.get(i).getDefinition();
+            cardWords[i] = searchedWords.get(i).getWord();
+        }
+        recycler.setLayoutManager(new LinearLayoutManager(this));
+        DefinitionAdapter adapter = new DefinitionAdapter(cardWords, cardDefinitions);
+        recycler.setAdapter(adapter);
+        Log.d("End of cards fetch", "I'm out");
+    }
 
 }
 
